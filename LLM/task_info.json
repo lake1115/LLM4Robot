@@ -1,0 +1,9 @@
+{
+    "pick_place":{
+        "episode": 1500,
+        "level": "easy",
+        "description": "The task of the agent is put the apple in the sink on the kitchen counter. please help agent to plan the next action given agent's current observations and statu: carry {object} or none. Availabel actions may includes: nav to {object}, pick {object}, place {object}. Do not explain the reasoning. \n ",
+        "example": "observation: {observed apple}, action: {nav to apple, pick apple}. \n",
+        "configurations": "my_rearrange_easy" 
+    }
+}
