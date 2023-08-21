@@ -120,8 +120,8 @@ class Pick_Place_Planner(Base_Planner):
         self.llm_model = "vicuna-7b-0"
         self.llm_url = 'http://10.106.27.11:8000/v1/chat/completions'
 
-    def __call__(self, input):
-        return self.forward(input)
+    def __call__(self, *args):
+        return self.forward(*args)
     
     def reset(self, show=False):
         self.dialogue_user = ''
@@ -132,11 +132,11 @@ class Pick_Place_Planner(Base_Planner):
             print(self.dialogue_system)
 
        
-    def forward(self, obs):
-        text = self.mediator.RL2LLM(obs)
+    def forward(self, obs, cur_skill=None):
+        text = self.mediator.RL2LLM(obs, cur_skill)
         # print(text)
         plan = self.ideal_planning(text)
-       # plan = "{nav goal0|0, pick goal0|0, nav TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
+        #plan = "{nav goal0|0, pick goal0|0, nav_to_receptacle TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
       
         self.dialogue_logger += text
         self.dialogue_logger += plan
@@ -149,16 +149,20 @@ class Pick_Place_Planner(Base_Planner):
     
     def ideal_planning(self, text):
         if text == "untargeted object":
-            plan = "{nav goal0|0}"
-            # plan = "{nav goal0|0, pick goal0|0, nav TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
+            # plan = "{nav goal0|0}"
+            plan = "{nav goal0|0, pick goal0|0, nav_to_receptacle TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
         elif text == "targeted object":
-            plan = "{pick goal0|0}"
-            # plan = "{pick goal0|0, nav TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
+            # plan = "{pick goal0|0}"
+            plan = "{pick goal0|0, nav_to_receptacle TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
         elif text == "untargeted goal": 
-            plan = "{nav TARGET_goal0|0}"
-            # plan = "{nav TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
+            # plan = "{nav_to_receptacle TARGET_goal0|0}"
+            plan = "{nav_to_receptacle TARGET_goal0|0, place goal0|0 TARGET_goal0|0}"
         elif text == "targeted goal":
             plan = "{place goal0|0 TARGET_goal0|0}"
+        elif text == "mission completed":
+            plan = "{wait}"
+        elif text == "reset arm":
+            plan = "{reset_arm 0}"
         return plan
 def Planner(task,seed=0):
     if task.lower() == "pick_place":

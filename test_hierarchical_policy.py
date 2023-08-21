@@ -83,16 +83,23 @@ def setup_seed(seed):
      random.seed(seed)
      torch.backends.cudnn.deterministic = True
 # 设置随机数种子
-setup_seed(5)
+setup_seed(3)
 
-
+#epsi = 26
+def get_episode_env(env, episode):
+    observations = env.reset()
+    current_episodes_info = env.current_episodes()
+    while current_episodes_info[0].episode_id != episode:
+        observations = env.reset() 
+        current_episodes_info = env.current_episodes()
+    return env, observations
 def main():
 
     config_path = "habitat-baselines/habitat_baselines/config"
     config_name = "rearrange/rl_hierarchical.yaml"
 
     hydra.initialize(config_path=config_path, job_name="test_app")
-    config = hydra.compose(config_name=config_name, overrides=['habitat_baselines.evaluate=True','habitat_baselines.num_environments=1'])
+    config = hydra.compose(config_name=config_name, overrides=['habitat_baselines.evaluate=True','habitat_baselines.num_environments=1',f'habitat_baselines.eval.evals_per_ep=2'])
     config = insert_render_options(patch_config(config))
     
     trainer_init = baseline_registry.get_trainer(config.habitat_baselines.trainer_name)
@@ -101,8 +108,8 @@ def main():
     trainer.device = torch.device("cuda")
     trainer._init_envs(config, is_eval=True)
     trainer._create_obs_transforms()
-    #agent = FixHierarchicalPolicy(config.habitat_baselines.rl.policy,config, trainer._env_spec.observation_space,trainer._env_spec.orig_action_space,config.habitat_baselines.num_environments)
-    agent = LLMHierarchicalPolicy(config.habitat_baselines.rl.policy,config, trainer._env_spec.observation_space,trainer._env_spec.orig_action_space,config.habitat_baselines.num_environments)
+    # agent = FixHierarchicalPolicy(config.habitat_baselines.rl.policy,config, trainer._env_spec.observation_space,trainer._env_spec.orig_action_space,config.habitat_baselines.num_environments)
+    agent = LLMHierarchicalPolicy(config.habitat_baselines.rl.policy,config, trainer._env_spec.observation_space,trainer._env_spec.action_space, trainer._env_spec.orig_action_space,config.habitat_baselines.num_environments,trainer.device)
     agent.to(trainer.device)
     agent.eval()
     action_shape, discrete_actions = get_action_space_info(trainer._env_spec.action_space)
@@ -134,43 +141,29 @@ def main():
 
     with torch.no_grad():
         env = trainer.envs
-        observations = env.reset()
+
+        env, observations = get_episode_env(env, "26")
+        #observations = env.reset()
         batch = batch_obs(observations, device=trainer.device)
         batch = apply_obs_transforms_batch(batch, trainer.obs_transforms)
         evals_per_ep = config.habitat_baselines.eval.evals_per_ep
         num_steps = 0
         while (len(stats_episodes) < (sum(env.number_of_episodes) * evals_per_ep) and env.num_envs > 0):
+
             num_steps += 1
             current_episodes_info = env.current_episodes()
-            action_data = agent.act(batch,test_recurrent_hidden_states,prev_actions,not_done_masks,deterministic=False,)
-            if action_data.should_inserts is None:  
-                test_recurrent_hidden_states = action_data.rnn_hidden_states
-                prev_actions.copy_(action_data.actions)  
-            else:
-                for i, should_insert in enumerate(action_data.should_inserts):
-                    if should_insert.item():
-                        test_recurrent_hidden_states[i] = action_data.rnn_hidden_states[i]
-                        prev_actions[i].copy_(action_data.actions[i])
-
-            if is_continuous_action_space(trainer._env_spec.action_space):
-                # Clipping actions to the specified limits
-                step_data = [
-                    np.clip(
-                        a.numpy(),
-                        trainer._env_spec.action_space.low,
-                        trainer._env_spec.action_space.high,
-                    )
-                    for a in action_data.env_actions.cpu()
-                ]
-            else:
-                step_data = [a.item() for a in action_data.env_actions.cpu()]           
+            step_data = agent.step_action(batch,not_done_masks,deterministic=False,)
+        
             outputs = env.step(step_data)
             observations, rewards_l, dones, infos = [list(x) for x in zip(*outputs)]
-            # ##
-            # print(f"num steps:{num_steps}, obsevations:{observations[0]['obj_start_gps_compass']}")
-            # ##
 
-
+            # if "move_obj_reward" in infos[0].keys():
+            #     print(infos[0]['num_steps'], infos[0]["move_obj_reward"]+rewards_l[0])
+            # elif "pick_reward" in infos[0].keys():
+            #     print(infos[0]['num_steps'], infos[0]["pick_reward"])
+            # ##
+            # print(f"num steps:{num_steps}, to_object:{observations[0]['obj_start_gps_compass']}, to_goal:{observations[0]['obj_goal_gps_compass']}")
+            # ##
             batch = batch_obs(observations, device=trainer.device)
             batch = apply_obs_transforms_batch(batch, trainer.obs_transforms)             
             not_done_masks = torch.tensor([[not done] for done in dones], dtype=torch.bool, device=trainer.device,)
@@ -191,11 +184,12 @@ def main():
                         # but the info is correct. So we use a black frame
                         frame = observations_to_image({k: v[i] * 0.0 for k, v in batch.items()}, infos[i])
                     frame = overlay_frame(frame, infos[i]) ## with infos
-                    frame = append_text_underneath_image(frame,f"num_steps: {num_steps} " + agent.planner.dialogue_user + agent._high_level_policy.current_skill)
+                    frame = append_text_underneath_image(frame,f"num_steps: {num_steps} " + agent.planner.dialogue_user + f"skill: {agent.rl_skill}" +"\t"+f"call_num: {agent._high_level_policy.call_num}",agent._high_level_policy.call)
                     rgb_frames[i].append(frame)
                 # episode ended
                 if not not_done_masks[i].item():
                     episode_stats = {"reward": current_episode_reward[i].item()}
+                    episode_stats.update(extract_scalars_from_info(infos[i]))
                     current_episode_reward[i] = 0
                     k = current_episodes_info[i].episode_id
                     ep_eval_count[k] += 1
@@ -210,15 +204,22 @@ def main():
                         images_to_video(rgb_frames[i], trainer.config.habitat_baselines.video_dir, video_name, fps=30, verbose=True)
                         rgb_frames[i] = []
                         num_steps = 0
+                        agent.reset()
 
             not_done_masks = not_done_masks.to(device=trainer.device)
             env, test_recurrent_hidden_states, not_done_masks, current_episode_reward, prev_actions, batch, rgb_frames,= trainer._pause_envs(envs_to_pause,env,test_recurrent_hidden_states,not_done_masks,current_episode_reward,prev_actions,batch,rgb_frames,)
  
 
     aggregated_stats = {}
+    fail_episodes = []
     for stat_key in next(iter(stats_episodes.values())).keys():
         aggregated_stats[stat_key] = np.mean([v[stat_key] for v in stats_episodes.values()])
+        if stat_key == config.habitat_baselines.eval_keys_to_include_in_name[0]:
+            for k, v in stats_episodes.items():
+                if v[stat_key] == 0:
+                    fail_episodes.append(k)
     print("eval_reward/average_reward", aggregated_stats)
+    print("fail episodes", fail_episodes)
     env.close()
 
 

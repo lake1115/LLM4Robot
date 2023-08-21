@@ -199,10 +199,10 @@ def main(args):
 if __name__ == '__main__':
    
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="depth_pick_skill", help="pick_skill, nav_skill, place_skill") 
+    parser.add_argument("--task", type=str, default="depth_nav_skill", help="pick_skill, nav_skill, place_skill") 
     parser.add_argument("--model_dir", type=str, required=True, help="path to folder containing policy and run details")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--evals_per_ep", type=int, default=1)
+    parser.add_argument("--evals_per_ep", type=int, default=2)
     parser.add_argument("--num_environments", type=int, default=1)
     parser.add_argument("--show", default=False, action='store_true')
 

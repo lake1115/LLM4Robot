@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 '''
-@File    :   my_test.py
+@File    :   my_test_episode.py
 @Time    :   2023/07/21 10:49:17
 @Author  :   Hu Bin 
 @Version :   1.0
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--evals_per_ep", type=int, default=1)
     parser.add_argument("--num_environments", type=int, default=1)
-    parser.add_argument("--episode", type=str, default=0)
+    parser.add_argument("--episode", type=str, default='0')
     parser.add_argument("--show", default=False, action='store_true')
 
     args = parser.parse_args()

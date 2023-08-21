@@ -10,13 +10,16 @@
 
 
 ROBOT_SKILL_TO_IDX = {
-   "nav": 0,
-   "pick": 1,
-   "place": 2,
-   "open_fridge": 3,
-   "close_fridge": 4,
-   "open_cab": 5,
-   "close_cab": 6,
+   "pick": 0,
+   "place": 1,
+   "wait": 2,               ## for end robot
+   "nav": 3,
+   "nav_to_receptacle": 4,  ## same as nav, maybe useless
+   "open_fridge": 5,
+   "close_fridge": 6,
+   "open_cab": 7,
+   "close_cab": 8,
+
 }
 IDX_TO_ROBOT_SKILL = dict(zip(ROBOT_SKILL_TO_IDX.values(), ROBOT_SKILL_TO_IDX.keys()))
 
@@ -49,18 +52,27 @@ class Habitat_Mediator(Base_Mediator):
          self.context += ", "
       self.context += f"{str}" 
     # ## obs2text
-   def RL2LLM(self, obs):
+   def RL2LLM(self, obs, cur_skill):
          self.context = ''
-         if obs['is_holding'][:,0] == 0:
-            if obs['obj_start_gps_compass'][:,0] < 1.5 and -0.5 < obs['obj_start_gps_compass'][:,1] < 0.5:
-               self.append_context('targeted object')
-            else:
-               self.append_context('untargeted object')
-         elif obs['is_holding'][:,0] == 1:
-            if obs['obj_goal_gps_compass'][:,0] < 1.5 and -0.5 < obs['obj_goal_gps_compass'][:,1] < 0.5:
-               self.append_context('targeted goal')
-            else:
-               self.append_context('untargeted goal')
+         if obs['obj_goal_gps_compass'][:,0] < 0.5 and obs['is_holding'][:,0] == 0:
+            self.append_context('mission completed')
+         else:
+            if obs['is_holding'][:,0] == 0:
+               if cur_skill == 0:  ## pick now, don't back to nav
+                  self.append_context('targeted object')
+               elif cur_skill == 1: ## place now, stop
+                  self.append_context('reset arm') 
+               elif obs['obj_start_gps_compass'][:,0] < 1.5 and -0.5 < obs['obj_start_gps_compass'][:,1] < 0.5:
+                  self.append_context('targeted object')
+               else:
+                  self.append_context('untargeted object')
+            elif obs['is_holding'][:,0] == 1:
+               if cur_skill == 1:  ## place now, don't back to nav
+                  self.append_context('targeted goal')
+               elif obs['obj_goal_gps_compass'][:,0] < 1.5 and -0.5 < obs['obj_goal_gps_compass'][:,1] < 0.5:
+                  self.append_context('targeted goal')
+               else:
+                  self.append_context('untargeted goal')
          context = self.context
          return context
     
@@ -92,8 +104,10 @@ class Habitat_Mediator(Base_Mediator):
             action, object = self.parse_func(line.strip())
             solution_actions = (action, object)
             skill_list.append(solution_actions)
-            if self.add_arm_rest:
+            if self.add_arm_rest and i < len(lines)-1:
                skill_list.append(self.parse_func("reset_arm 0"))
+         # if plan == "wait":
+         #    skill_list = self.parse_func("wait 30")
          return skill_list
 if __name__ == '__main__':
    pass
