@@ -31,8 +31,8 @@ if __name__ == '__main__':
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--evals_per_ep", type=int, default=1)
     parser.add_argument("--num_environments", type=int, default=1)
-    parser.add_argument("--episode", type=str, default='21')
-    parser.add_argument("--task", type=str, default='rl_hierarchical')
+    parser.add_argument("--episode_idx", type=int, default='7')
+    parser.add_argument("--task", type=str, default='ks_fix_hierarchical')
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--ask_lambda", type=float, default=0.01, help="weight on communication penalty term")
     parser.add_argument("--batch_size", type=int, default=64)
@@ -45,13 +45,15 @@ if __name__ == '__main__':
     parser.add_argument("--ckpt_num", type=int, default=10, help="Number of save model")
     parser.add_argument("--logdir", type=str, default="./log/")          # Where to log diagnostics to
     parser.add_argument("--record_video", default=False, action='store_true')
-    parser.add_argument("--test_num", type=int, default=10)
+    parser.add_argument("--test_num", type=int, default=20)
     parser.add_argument("--eval_type", type=str, default="LLM", help="LLM, fix, always, random")
-
+    parser.add_argument("--train_seed", type=int, default="0")
 
     if sys.argv[1] == 'train':
         sys.argv.remove(sys.argv[1])
-        args = parser.parse_args()    
+        args = parser.parse_args()  
+        setup_seed(args.train_seed)
+        args.save_name = args.save_name + f"_seed{args.train_seed}"   
         env = Env(args)
         env.train()
     elif sys.argv[1] == 'eval':
@@ -61,7 +63,7 @@ if __name__ == '__main__':
         print("env name: %s for %s" %(args.task, args.save_name))
         if args.eval_type.lower() == "llm":
             output_dir = os.path.join(args.logdir, args.policy, args.task, args.save_name)
-            policy = torch.load(output_dir + "/latest.pt")
+            policy = torch.load(output_dir + "/latest.pth")
             policy.eval()
             env = Env(args,policy)
         else:
