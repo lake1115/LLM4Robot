@@ -1,0 +1,57 @@
+---
+dataset_path: "data/replica_cad/replicaCAD.scene_dataset_config.json"
+additional_object_paths:
+  - "data/objects/ycb/configs/"
+scene_sets:
+  -
+    name: "v3_sc"
+    included_substrings:
+      - "v3_sc"
+    excluded_substrings: []
+    comment: "This set (v3_sc) selects all 105 ReplicaCAD variations with static furniture."
+
+object_sets:
+  -
+    name: "apple"
+    included_substrings:
+      - "013_apple.object_config.json"
+    excluded_substrings: []
+    comment: "Leave included_substrings empty to select all objects."
+
+receptacle_sets:
+  -
+    name: "table"
+    included_object_substrings:
+      - "frl_apartment_table_01"
+    excluded_object_substrings: []
+    included_receptacle_substrings:
+      - ""
+    excluded_receptacle_substrings: []
+    comment: "The empty substrings act like wildcards, selecting all receptacles for all objects."
+
+scene_sampler:
+  type: "subset"
+  params:
+    scene_sets: ["v3_sc"]
+  comment: "Samples from ReplicaCAD 105 variations with static furniture."
+
+
+object_samplers:
+  -
+    name: "table_apple"
+    type: "uniform"
+    params:
+      object_sets: ["apple"]
+      receptacle_sets: ["table"]
+      num_samples: [1, 1]
+      orientation_sampling: "up"
+
+object_target_samplers:
+  -
+    name: "table_apple_targets"
+    type: "uniform"
+    params:
+      object_samplers: ["table_apple"]
+      receptacle_sets: ["table"]
+      num_samples: [1, 1]
+      orientation_sampling: "up"

@@ -5,7 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-import os
 
 
 class HabitatLogger(logging.Logger):
@@ -36,7 +35,5 @@ class HabitatLogger(logging.Logger):
 
 
 logger = HabitatLogger(
-    name="habitat",
-    level=int(os.environ.get("HABITAT_LAB_LOG", logging.INFO)),
-    format_str="%(asctime)-15s %(message)s",
+    name="habitat", level=logging.INFO, format_str="%(asctime)-15s %(message)s"
 )

@@ -18,7 +18,6 @@ from typing import (
     Iterator,
     List,
     Optional,
-    OrderedDict,
     Sequence,
     Set,
     Tuple,
@@ -32,7 +31,6 @@ import numpy as np
 from gym import spaces
 
 import habitat
-from habitat.core.batch_rendering.env_batch_renderer import EnvBatchRenderer
 from habitat.core.env import Env, RLEnv
 from habitat.core.logging import logger
 from habitat.core.utils import tile_images
@@ -150,7 +148,6 @@ class VectorEnv:
     _mp_ctx: BaseContext
     _connection_read_fns: List[_ReadWrapper]
     _connection_write_fns: List[_WriteWrapper]
-    _batch_renderer: Optional[EnvBatchRenderer] = None
 
     def __init__(
         self,
@@ -232,6 +229,7 @@ class VectorEnv:
         return self._num_envs - len(self._paused)
 
     @staticmethod
+    @profiling_wrapper.RangeContext("_worker_env")
     def _worker_env(
         connection_read_fn: Callable,
         connection_write_fn: Callable,
@@ -258,11 +256,12 @@ class VectorEnv:
             while command != CLOSE_COMMAND:
                 if command == STEP_COMMAND:
                     observations, reward, done, info = env.step(data)
-
                     if auto_reset_done and done:
                         observations = env.reset()
-
-                    connection_write_fn((observations, reward, done, info))
+                    with profiling_wrapper.RangeContext(
+                        "worker write after step"
+                    ):
+                        connection_write_fn((observations, reward, done, info))
 
                 elif command == RESET_COMMAND:
                     observations = env.reset()
@@ -291,7 +290,8 @@ class VectorEnv:
                 else:
                     raise NotImplementedError(f"Unknown command {command}")
 
-                command, data = connection_read_fn()
+                with profiling_wrapper.RangeContext("worker wait for command"):
+                    command, data = connection_read_fn()
 
         except KeyboardInterrupt:
             logger.info("Worker KeyboardInterrupt")
@@ -380,7 +380,7 @@ class VectorEnv:
     def reset(self):
         r"""Reset all the vectorized environments
 
-        :return: list of outputs from the reset method of envs.
+        :return: list of outputs from the reset method of envs.reset
         """
         for write_fn in self._connection_write_fns:
             write_fn((RESET_COMMAND, None))
@@ -432,7 +432,7 @@ class VectorEnv:
 
     @profiling_wrapper.RangeContext("wait_step")
     def wait_step(self) -> List[Any]:
-        r"""Wait until all the asynchronous environments have synchronized."""
+        r"""Wait until all the asynchronized environments have synchronized."""
         return [
             self.wait_step_at(index_env) for index_env in range(self.num_envs)
         ]
@@ -447,16 +447,6 @@ class VectorEnv:
         """
         self.async_step(data)
         return self.wait_step()
-
-    def post_step(self, observations) -> List[OrderedDict]:
-        r"""Performs batch transformations on step outputs.
-
-        :param observations: Observation dicts for each environment.
-        :return: Processed observation dicts for each environment.
-        """
-        if self._batch_renderer is not None:
-            observations = self._batch_renderer.post_step(observations)
-        return observations
 
     def close(self) -> None:
         if self._is_closed:
@@ -479,9 +469,6 @@ class VectorEnv:
             process.join()
 
         self._is_closed = True
-
-        if self._batch_renderer != None:
-            self._batch_renderer.close()
 
     def pause_at(self, index: int) -> None:
         r"""Pauses computation on this env without destroying the env.
@@ -559,14 +546,9 @@ class VectorEnv:
         self, mode: str = "human", *args, **kwargs
     ) -> Optional[np.ndarray]:
         r"""Render observations from all environments in a tiled image."""
-        if self._batch_renderer is not None:
-            images = self._batch_renderer.copy_output_to_image()
-        else:
-            for write_fn in self._connection_write_fns:
-                write_fn(
-                    (RENDER_COMMAND, (args, {"mode": "rgb_array", **kwargs}))
-                )
-            images = [read_fn() for read_fn in self._connection_read_fns]
+        for write_fn in self._connection_write_fns:
+            write_fn((RENDER_COMMAND, (args, {"mode": "rgb_array", **kwargs})))
+        images = [read_fn() for read_fn in self._connection_read_fns]
         tile = tile_images(images)
         if mode == "human":
             from habitat.core.utils import try_cv2_import
@@ -580,14 +562,6 @@ class VectorEnv:
             return tile
         else:
             raise NotImplementedError
-
-    def initialize_batch_renderer(self, config: "DictConfig") -> None:
-        r"""Provides VectorEnv with batch rendering capability.
-        Refer to the EnvBatchRenderer class.
-
-        :param config: Base configuration."""
-        assert config.habitat.simulator.renderer.enable_batch_renderer
-        self._batch_renderer = EnvBatchRenderer(config, self.num_envs)
 
     @property
     def _valid_start_methods(self) -> Set[str]:
