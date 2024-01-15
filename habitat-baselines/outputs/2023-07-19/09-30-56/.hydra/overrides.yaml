@@ -1,3 +1,0 @@
-- habitat_baselines.evaluate=True
-- habitat_baselines/rl/policy=hl_fixed
-- habitat_baselines/rl/policy/hierarchical_policy/defined_skills=oracle_skills
