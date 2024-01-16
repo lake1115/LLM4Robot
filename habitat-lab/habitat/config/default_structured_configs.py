@@ -81,8 +81,10 @@ __all__ = [
     "NavToObjSuccessMeasurementConfig",
     "NavToObjRewardMeasurementConfig",
     "CompositeSuccessMeasurementConfig",
-    # PROFILING MEASURES
-    "RuntimePerfStatsMeasurementConfig",
+    ## nav pick by Hu
+    "DistanceToTargetObjectMeasurementConfig",
+    "NavPickRewardMeasurementConfig",
+    "NavPickSuccessMeasurementConfig",
 ]
 
 
@@ -148,15 +150,8 @@ class EmptyActionConfig(ActionConfig):
 # -----------------------------------------------------------------------------
 # # NAVIGATION actions
 # -----------------------------------------------------------------------------
-
-
 @dataclass
-class DiscreteNavigationActionConfig(ActionConfig):
-    tilt_angle: int = 15  # angle to tilt the camera up or down in degrees
-
-
-@dataclass
-class MoveForwardActionConfig(DiscreteNavigationActionConfig):
+class MoveForwardActionConfig(ActionConfig):
     r"""
     In Navigation tasks only, this discrete action will move the robot forward by
     a fixed amount determined by the SimulatorConfig.forward_step_size amount.
@@ -165,7 +160,7 @@ class MoveForwardActionConfig(DiscreteNavigationActionConfig):
 
 
 @dataclass
-class TurnLeftActionConfig(DiscreteNavigationActionConfig):
+class TurnLeftActionConfig(ActionConfig):
     r"""
     In Navigation tasks only, this discrete action will rotate the robot to the left
     by a fixed amount determined by the SimulatorConfig.turn_angle amount.
@@ -174,7 +169,7 @@ class TurnLeftActionConfig(DiscreteNavigationActionConfig):
 
 
 @dataclass
-class TurnRightActionConfig(DiscreteNavigationActionConfig):
+class TurnRightActionConfig(ActionConfig):
     r"""
     In Navigation tasks only, this discrete action will rotate the robot to the right
     by a fixed amount determined by the SimulatorConfig.turn_angle amount.
@@ -183,7 +178,7 @@ class TurnRightActionConfig(DiscreteNavigationActionConfig):
 
 
 @dataclass
-class LookUpActionConfig(DiscreteNavigationActionConfig):
+class LookUpActionConfig(ActionConfig):
     r"""
     In Navigation tasks only, this discrete action will rotate the robot's camera up
     by a fixed amount determined by the SimulatorConfig.tilt_angle amount.
@@ -192,7 +187,7 @@ class LookUpActionConfig(DiscreteNavigationActionConfig):
 
 
 @dataclass
-class LookDownActionConfig(DiscreteNavigationActionConfig):
+class LookDownActionConfig(ActionConfig):
     r"""
     In Navigation tasks only, this discrete action will rotate the robot's camera down
     by a fixed amount determined by the SimulatorConfig.tilt_angle amount.
@@ -685,18 +680,6 @@ class CollisionsMeasurementConfig(MeasurementConfig):
 
 
 @dataclass
-class RuntimePerfStatsMeasurementConfig(MeasurementConfig):
-    """
-    If added to the measurements, this will time various sections of code in
-    the simulator and task logic. If using with a multi-environment trainer
-    (like DD-PPO) it is recommended to only log this stat for one environment
-    since this metric can include many numbers.
-    """
-
-    type: str = "RuntimePerfStats"
-
-
-@dataclass
 class RobotForceMeasurementConfig(MeasurementConfig):
     r"""
     The amount of force in newton's applied by the robot. It computes both the instant and accumulated.
@@ -1091,7 +1074,6 @@ class TaskConfig(HabitatBaseConfig):
     The definition of the task in Habitat.
 
     :property type: The registered task that will be used. For example : `InstanceImageNav-v1` or `ObjectNav-v1`
-    :property physics_target_sps: The size of each simulator physics update will be 1 / physics_target_sps.
     :property reward_measure: The name of the Measurement that will correspond to the reward of the robot. This value must be a key present in the dictionary of Measurements in the habitat configuration. For example, `distance_to_goal_reward` for navigation or `place_reward` for the rearrangement place task.
     :property success_measure: The name of the Measurement that will correspond to the success criteria of the robot. This value must be a key present in the dictionary of Measurements in the habitat configuration. If the measurement has a non-zero value, the episode is considered a success.
     :property end_on_success: If True, the episode will end when the success measure indicates success. Otherwise the episode will go on (this is useful when doing hierarchical learning and the robot has to explicitly decide when to change policies)
@@ -1118,7 +1100,6 @@ class TaskConfig(HabitatBaseConfig):
     -   Rearrangement reach : `RearrangeReachTask-v0`
     -   Rearrangement composite tasks : `RearrangeCompositeTask-v0`
     """
-    physics_target_sps: float = 60.0
     reward_measure: Optional[str] = None
     success_measure: Optional[str] = None
     success_reward: float = 2.5
@@ -1129,11 +1110,6 @@ class TaskConfig(HabitatBaseConfig):
     # Temporary structure for sensors
     lab_sensors: Dict[str, LabSensorConfig] = field(default_factory=dict)
     measurements: Dict[str, MeasurementConfig] = field(default_factory=dict)
-    # Measures to only construct in the first environment of the first rank for
-    # vectorized environments.
-    rank0_env0_measure_names: List[str] = field(
-        default_factory=lambda: ["habitat_perf"]
-    )
     goal_sensor_uuid: str = "pointgoal"
     # REARRANGE task
     count_obj_collisions: bool = True
@@ -1153,9 +1129,6 @@ class TaskConfig(HabitatBaseConfig):
     num_spawn_attempts: int = 200
     spawn_max_dist_to_obj: float = 2.0
     base_angle_noise: float = 0.523599
-    # Factor to shrink the receptacle sampling volume when predicates place
-    # objects on top of receptacles.
-    recep_place_shrink_factor: float = 0.8
     # EE sample parameters
     ee_sample_factor: float = 0.2
     ee_exclude_region: float = 0.0
@@ -1180,6 +1153,7 @@ class TaskConfig(HabitatBaseConfig):
     enable_safe_drop: bool = False
     art_succ_thresh: float = 0.15
     robot_at_thresh: float = 2.0
+    filter_nav_to_tasks: List = field(default_factory=list)
     actions: Dict[str, ActionConfig] = MISSING
 
 
@@ -1344,27 +1318,11 @@ class AgentConfig(HabitatBaseConfig):
     start_position: List[float] = field(default_factory=lambda: [0, 0, 0])
     start_rotation: List[float] = field(default_factory=lambda: [0, 0, 0, 1])
     joint_start_noise: float = 0.1
-    # Hard-code the robot joint start. `joint_start_noise` still applies.
-    joint_start_override: Optional[List[float]] = None
     articulated_agent_urdf: str = "data/robots/hab_fetch/robots/hab_fetch.urdf"
     articulated_agent_type: str = "FetchRobot"
     ik_arm_urdf: str = "data/robots/hab_fetch/robots/fetch_onlyarm.urdf"
     # File to motion data, used to play pre-recorded motions
     motion_data_path: str = ""
-
-
-@dataclass
-class RendererConfig(HabitatBaseConfig):
-    r"""Configuration for the renderer.
-
-    :property enable_batch_renderer: [Experimental] Enables batch rendering, which accelerates rendering for concurrent environments. See env_batch_renderer.py for details.
-    :property composite_files: List of composite GLTF files to be pre-loaded by the batch renderer.
-    :property classic_replay_renderer: For debugging. Create a ClassicReplayRenderer instead of BatchReplayRenderer when enable_batch_renderer is active.
-    """
-
-    enable_batch_renderer: bool = False
-    composite_files: Optional[List[str]] = None
-    classic_replay_renderer: bool = False
 
 
 @dataclass
@@ -1391,8 +1349,9 @@ class HabitatSimV0Config(HabitatBaseConfig):
 @dataclass
 class SimulatorConfig(HabitatBaseConfig):
     type: str = "Sim-v0"
+    action_space_config: str = "v0"
+    action_space_config_arguments: Dict[str, Any] = field(default_factory=dict)
     forward_step_size: float = 0.25  # in metres
-    turn_angle: int = 10  # angle to rotate left or right in degrees
     create_renderer: bool = False
     requires_textures: bool = True
     # Sleep options
@@ -1414,14 +1373,12 @@ class SimulatorConfig(HabitatBaseConfig):
     # otherwise it leads to circular references:
     #
     seed: int = II("habitat.seed")
+    turn_angle: int = 10  # angle to rotate left or right in degrees
+    tilt_angle: int = 15  # angle to tilt the camera up or down in degrees
     default_agent_id: int = 0
     debug_render: bool = False
     debug_render_articulated_agent: bool = False
     kinematic_mode: bool = False
-    # If False, will skip setting the semantic IDs of objects in
-    # `rearrange_sim.py` (there is overhead to this operation so skip if not
-    # using semantic information).
-    should_setup_semantic_ids: bool = True
     # If in render mode a visualization of the rearrangement goal position
     # should also be displayed
     debug_render_goal: bool = True
@@ -1442,20 +1399,12 @@ class SimulatorConfig(HabitatBaseConfig):
     # If the number of agents is greater than one,
     # then agents_order has to be set explicitly.
     agents_order: List[str] = MISSING
-
-    # Simulator should use default navmesh settings from agent config
-    default_agent_navmesh: bool = True
-    # if default navmesh is used, should it include static objects
-    navmesh_include_static_objects: bool = False
-
     habitat_sim_v0: HabitatSimV0Config = HabitatSimV0Config()
     # ep_info is added to the config in some rearrange tasks inside
     # merge_sim_episode_with_object_config
     ep_info: Optional[Any] = None
     # The offset id values for the object
     object_ids_start: int = 100
-    # Configuration for rendering
-    renderer: RendererConfig = RendererConfig()
 
 
 @dataclass
@@ -1577,6 +1526,29 @@ class HabitatConfig(HabitatBaseConfig):
     task: TaskConfig = MISSING
     dataset: DatasetConfig = MISSING
     gym: GymConfig = GymConfig()
+
+#####  nav pick by Hu ###########
+@dataclass
+class DistanceToTargetObjectMeasurementConfig(MeasurementConfig):
+    type: str = "DistanceToTargetObject"
+
+
+@dataclass
+class NavPickRewardMeasurementConfig(MeasurementConfig):
+    type: str = "NavPickReward"
+    scaling_factor: float = 0.1
+    # General Rearrange Reward config
+    constraint_violate_pen: float = 10.0
+    force_pen: float = 0.001
+    max_force_pen: float = 1.0
+    force_end_pen: float = 10.0
+
+
+@dataclass
+class NavPickSuccessMeasurementConfig(MeasurementConfig):
+    type: str = "NavPickSuccess"
+
+##############
 
 
 # -----------------------------------------------------------------------------
@@ -2208,13 +2180,28 @@ cs.store(
     name="rearrange_reach_success",
     node=RearrangeReachSuccessMeasurementConfig,
 )
-cs.store(
-    package="habitat.task.measurements.habitat_perf",
-    group="habitat/task/measurements",
-    name="habitat_perf",
-    node=RuntimePerfStatsMeasurementConfig,
-)
 
+### nav_pick by Hu ###
+
+cs.store(
+    package="habitat.task.measurements.distance_to_target_object",
+    group="habitat/task/measurements",
+    name="distance_to_target_object",
+    node=DistanceToTargetObjectMeasurementConfig,
+)
+cs.store(
+    package="habitat.task.measurements.nav_pick_reward",
+    group="habitat/task/measurements",
+    name="nav_pick_reward",
+    node=NavPickRewardMeasurementConfig,
+)
+cs.store(
+    package="habitat.task.measurements.nav_pick_success",
+    group="habitat/task/measurements",
+    name="nav_pick_success",
+    node=NavPickSuccessMeasurementConfig,
+)
+#############
 
 from hydra.core.config_search_path import ConfigSearchPath
 from hydra.core.plugins import Plugins
@@ -2227,6 +2214,12 @@ class HabitatConfigPlugin(SearchPathPlugin):
             provider="habitat",
             path="pkg://habitat/config/",
         )
+        ## add habitat_baselines by Hu ##
+        search_path.append(
+            provider="habitat_baselines",
+            path="pkg://habitat_baselines/config/",
+        )
+        ##
 
 
 def register_hydra_plugin(plugin) -> None:
