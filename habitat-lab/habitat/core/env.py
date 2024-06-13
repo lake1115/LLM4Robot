@@ -267,6 +267,32 @@ class Env:
         )
 
         return observations
+    
+    # set episode reset by Hu Bin
+    def episode_reset(self, episode_idx) -> Observations:
+        r"""Resets the environments and returns the initial observations for episode_idx.
+
+        :return: initial observations from the environment.
+        """
+        self._reset_stats()
+
+        self.current_episode = self.episodes[episode_idx]
+        
+        # This is always set to true after a reset that way
+        # on the next reset an new episode is taken (if possible)
+        self._episode_from_iter_on_reset = True
+        self._episode_force_changed = False
+        assert self._current_episode is not None, "Reset requires an episode"
+        self.reconfigure(self._config)
+
+        observations = self.task.reset(episode=self.current_episode)
+        self._task.measurements.reset_measures(
+            episode=self.current_episode,
+            task=self.task,
+            observations=observations,
+        )
+
+        return observations
 
     def _update_step_stats(self) -> None:
         self._elapsed_steps += 1
@@ -422,6 +448,14 @@ class RLEnv(gym.Env):
         self, *, return_info: bool = False, **kwargs
     ) -> Union[Observations, Tuple[Observations, Dict]]:
         observations = self._env.reset()
+        if return_info:
+            return observations, self.get_info(observations)
+        else:
+            return observations
+        
+    # set episode reset by Hu Bin
+    def episode_reset(self, episode_idx,  *, return_info: bool = False, **kwargs):
+        observations = self._env.episode_reset(episode_idx)
         if return_info:
             return observations, self.get_info(observations)
         else:

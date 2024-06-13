@@ -30,8 +30,6 @@ from habitat_baselines.utils.common import (
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
-from habitat_baselines.utils.timing import g_timer
-
 
 @dataclass
 class PolicyActionData:
@@ -72,6 +70,10 @@ class PolicyActionData:
         :param write_action: The action to write at `write_idx`.
         """
         self.actions[:, write_idx] = write_action
+        ## add policy_info by Hu Bin
+        #if self.policy_info is not None:
+        self.policy_info[0][:, write_idx] = write_action
+        ##
 
     @property
     def env_actions(self) -> torch.Tensor:
@@ -241,14 +243,22 @@ class NetPolicy(nn.Module, Policy):
             action = distribution.sample()
 
         action_log_probs = distribution.log_probs(action)
+        # return PolicyActionData(
+        #     values=value,
+        #     actions=action,
+        #     action_log_probs=action_log_probs,
+        #     rnn_hidden_states=rnn_hidden_states,
+        # )
+        ## add policy info for feedback distribution
         return PolicyActionData(
             values=value,
             actions=action,
             action_log_probs=action_log_probs,
             rnn_hidden_states=rnn_hidden_states,
+            policy_info = [distribution.loc, distribution.scale], 
         )
 
-    @g_timer.avg_time("net_policy.get_value", level=1)
+
     def get_value(self, observations, rnn_hidden_states, prev_actions, masks):
         features, _, _ = self.net(
             observations, rnn_hidden_states, prev_actions, masks

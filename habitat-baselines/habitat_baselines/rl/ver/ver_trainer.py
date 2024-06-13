@@ -47,6 +47,7 @@ from habitat_baselines.rl.ver.inference_worker import (
 from habitat_baselines.rl.ver.preemption_decider import PreemptionDeciderWorker
 from habitat_baselines.rl.ver.report_worker import ReportWorker
 from habitat_baselines.rl.ver.task_enums import ReportWorkerTasks
+from habitat_baselines.rl.ver.timing import Timing
 from habitat_baselines.rl.ver.ver_rollout_storage import VERRolloutStorage
 from habitat_baselines.rl.ver.worker_common import (
     InferenceWorkerSync,
@@ -54,7 +55,6 @@ from habitat_baselines.rl.ver.worker_common import (
     WorkerQueues,
 )
 from habitat_baselines.utils.common import cosine_decay, inference_mode
-from habitat_baselines.utils.timing import Timing
 
 try:
     torch.backends.cudnn.allow_tf32 = True
@@ -75,16 +75,12 @@ class VERTrainer(PPOTrainer):
             is_distrib=self._is_distributed,
             device=self.device,
             resume_state=resume_state,
-            num_envs=self.config.habitat_baselines.num_environments,
+            num_envs=len(self.environment_workers),
             percent_done_fn=self.percent_done,
             **kwargs,
         )
 
     def _init_train(self, resume_state):
-        assert (
-            not self.config.habitat.simulator.renderer.enable_batch_renderer
-        ), "VER trainer does not support batch rendering."
-
         if self._is_distributed:
             local_rank, world_rank, _ = get_distrib_size()
 

@@ -23,5 +23,5 @@ MAIN_ADDR=$(scontrol show hostnames "${SLURM_JOB_NODELIST}" | head -n 1)
 export MAIN_ADDR
 
 set -x
-srun python habitat-baselines/habitat_baselines/run.py \
-    --config-name=rearrange/depth_place_skill.yaml
+srun python -u -m habitat_baselines.run \
+    --config-name=pointnav/ddppo_pointnav.yaml

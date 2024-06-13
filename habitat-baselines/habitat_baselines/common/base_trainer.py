@@ -86,7 +86,7 @@ class BaseTrainer:
             self.config = self._get_resume_state_config_or_new_config(
                 resume_state["config"]
             )
-            prev_ckpt_ind = resume_state["prev_ckpt_ind"]
+            prev_ckpt_ind = -1 #resume_state["prev_ckpt_ind"]
         else:
             prev_ckpt_ind = -1
 

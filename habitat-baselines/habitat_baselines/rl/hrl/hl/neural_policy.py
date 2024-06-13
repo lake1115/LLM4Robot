@@ -81,10 +81,6 @@ class NeuralHighLevelPolicy(HighLevelPolicy):
         self._policy = CategoricalNet(self._hidden_size, self._n_actions)
         self._critic = CriticHead(self._hidden_size)
 
-    @property
-    def should_load_agent_state(self):
-        return True
-
     def create_hl_info(self):
         return {"actions": None}
 
@@ -158,7 +154,7 @@ class NeuralHighLevelPolicy(HighLevelPolicy):
         action,
         rnn_build_seq_info,
     ):
-        features, rnn_hidden_states = self.forward(
+        features, _ = self.forward(
             observations, rnn_hidden_states, masks, rnn_build_seq_info
         )
         distribution = self._policy(features)

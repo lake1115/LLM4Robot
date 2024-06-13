@@ -67,12 +67,6 @@ class NnSkillPolicy(SkillPolicy):
             f"Skill {self._config.skill_name}: action offset {self._ac_start}, action length {self._ac_len}"
         )
 
-    @property
-    def required_obs_keys(self):
-        return super().required_obs_keys + list(
-            self._filtered_obs_space.spaces.keys()
-        )
-
     def parameters(self):
         if self._wrap_policy is not None:
             return self._wrap_policy.parameters()
@@ -155,6 +149,22 @@ class NnSkillPolicy(SkillPolicy):
         self._did_want_done[cur_batch_idx] = full_action[
             :, self._stop_action_idx
         ]
+
+        ## add full policy_info by Hu Bin
+        full_action_loc = torch.zeros(
+            (masks.shape[0], self._full_ac_size), device=masks.device
+        )
+        full_action_scale = torch.zeros(
+            (masks.shape[0], self._full_ac_size), device=masks.device
+        )
+        full_action_loc[
+            :, self._ac_start : self._ac_start + self._ac_len
+        ] = action_data.policy_info[0]
+        full_action_scale[
+            :, self._ac_start : self._ac_start + self._ac_len
+        ] = action_data.policy_info[1]
+        action_data.policy_info = [full_action_loc,full_action_scale]
+        ##
         return action_data
 
     @classmethod
@@ -224,13 +234,7 @@ class NnSkillPolicy(SkillPolicy):
         )
         if len(ckpt_dict) > 0:
             try:
-                actor_critic.load_state_dict(
-                    {  # type: ignore
-                        k[len("actor_critic.") :]: v
-                        for k, v in ckpt_dict["state_dict"].items()
-                    }
-                )
-
+                actor_critic.load_state_dict(ckpt_dict["state_dict"])
             except Exception as e:
                 raise ValueError(
                     f"Could not load checkpoint for skill {config.skill_name} from {config.load_ckpt_file}"

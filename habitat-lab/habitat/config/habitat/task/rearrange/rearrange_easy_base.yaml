@@ -34,15 +34,21 @@ defaults:
 type: RearrangeCompositeTask-v0
 reward_measure: move_obj_reward
 success_measure: composite_success
-success_reward: 100.0
-slack_reward: -0.01
-end_on_success: True
+success_reward: 0.0
+slack_reward: -0.005
+end_on_success: False
 constraint_violation_ends_episode: False
 constraint_violation_drops_object: True
 task_spec: rearrange_easy
 measurements:
   move_objects_reward:
-    force_pen: 0.0
+    dist_reward: 1.0
+    pick_reward: 5.0
+    success_dist: 0.2
+    single_rearrange_reward: 20.0
+    force_pen: 0.001
   force_terminate:
-    max_accum_force: 100000.0
-    max_instant_force: 10000.0
+    max_accum_force: 10_000.0
+    max_instant_force: 10_000.0
+  composite_success:
+    must_call_stop: True

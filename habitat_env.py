@@ -33,7 +33,15 @@ import torch
 import time
 import sys
 import algos
-
+ROBOT_SKILL_TO_IDX = {
+   "pick": 0,
+   "place": 1,
+   "nav": 3,
+   "nav2": 4,  ## same as nav, maybe useless
+   "reset": 5,
+   "init": -1,
+}
+IDX_TO_ROBOT_SKILL = dict(zip(ROBOT_SKILL_TO_IDX.values(), ROBOT_SKILL_TO_IDX.keys()))
 def insert_render_options(config):
     # Added settings to make rendering higher resolution for better visualization
     with habitat.config.read_write(config):
@@ -56,7 +64,7 @@ class Env:
         self.lam = args.lam
         self.ask_lambda = args.ask_lambda
         self.batch_size = args.batch_size
-        self.episode = args.episode
+        self.episode_idx = args.episode_idx
         self.device = torch.device(args.device)
         self.seed = args.seed
         self.ckpt_num = args.ckpt_num
@@ -67,11 +75,12 @@ class Env:
         config = hydra.compose(config_name=config_name, overrides=['habitat_baselines.evaluate=True',f'habitat_baselines.num_environments=1',f'habitat_baselines.eval.evals_per_ep={args.evals_per_ep}'])
         self.config = insert_render_options(patch_config(config))
         self.env = habitat.gym.make_gym_from_config(self.config)
-        self.env.env.env.habitat_env.episode_iterator=None  ## set no episode iterator
+        #self.env.env.env.habitat_env.episode_iterator=None  ## set no episode iterator
         self.obs_transforms = get_active_obs_transforms(self.config)
         observation_space = apply_obs_transforms_obs_space(self.env.observation_space, self.obs_transforms)
         action_space = self.env.action_space
-        orig_action_space = self.env.env.original_action_space    
+        orig_action_space = self.env.env.original_action_space 
+        self.logger = algos.create_logger(args)   
         if args.eval_type.lower() == "fix":     
             self.agent = FixHierarchicalPolicy(self.config.habitat_baselines.rl.policy,self.config, observation_space, action_space, orig_action_space, 1, self.device) 
         elif args.eval_type.lower() == "always":     
@@ -85,7 +94,7 @@ class Env:
                 self.agent._high_level_policy.comm_net = policy.to(self.device)        
             
             self.buffer = algos.Buffer(self.gamma, self.lam, self.device)    
-            self.logger = algos.create_logger(args)
+           
             self.ppo_algo = algos.PPO(self.agent._high_level_policy.comm_net, device=self.device, save_path=self.logger.dir, batch_size=self.batch_size)
 
             self.n_itr = args.n_itr
@@ -96,7 +105,7 @@ class Env:
     def train(self):
         start_time = time.time()
         ckpt_itr = 0
-        for itr in range(self.n_itr):
+        for itr in range(1, self.n_itr+1):
             print("********** Iteration {} ************".format(itr))
             print("time elapsed: {:.2f} s".format(time.time() - start_time))        
             ## collecting ##
@@ -168,7 +177,10 @@ class Env:
 
         with torch.no_grad():
             buffer = algos.Buffer(self.gamma, self.lam)
-            obs = self.env.reset()
+            if self.episode_idx is None:
+                obs = self.env.reset()
+            else:
+                obs = self.env.episode_reset(self.episode_idx)
             self.agent.reset()
             done = False
             not_done_masks = torch.zeros(1,device=self.device,dtype=torch.bool,)
@@ -213,7 +225,10 @@ class Env:
             except OSError:
                 pass
         with torch.no_grad():
-            obs = self.env.reset()
+            if self.episode_idx is None:
+                obs = self.env.reset()
+            else:
+                obs = self.env.episode_reset(self.episode_idx)
             print(f"current episode {self.env.current_episode().episode_id}, seed {seed}")
             self.agent.reset()
             done = False
@@ -247,11 +262,16 @@ class Env:
 
                 if self.record_video:
                     frame = observations_to_image({k: v[0] for k, v in batch.items()}, info)
+                    third_rgb = {'third_rgb': batch['third_rgb'][0]}
                     if not not_done_masks.item():
                         frame = observations_to_image({k: v[0] * 0.0 for k, v in batch.items()}, info)
+                        third_rgb = {'third_rgb': batch['third_rgb'][0]*0.0}
+                    third_rgb_frame = observations_to_image(third_rgb, info)
                     frame = overlay_frame(frame, info) ## with infos
-                    frame = append_text_underneath_image(frame,f"num_steps: {info['num_steps']} " + self.agent.planner.dialogue_user + f"skill: {rl_skill}" +"\t"+f"call_num: {self.agent._high_level_policy.call_num}",self.agent._high_level_policy.call)
+                    #frame = append_text_underneath_image(frame,f"num_steps: {info['num_steps']} " + self.agent.planner.dialogue_user + f"skill: {rl_skill}" +"\t"+f"call_num: {self.agent._high_level_policy.call_num}",self.agent._high_level_policy.call)
+                    #third_rgb_frame = append_text_underneath_image(third_rgb_frame, self.agent._high_level_policy.planner.dialogue_user + f" Option: {IDX_TO_ROBOT_SKILL[self.agent.rl_skill.item()]}"+ f"  Ask: {self.agent._high_level_policy.call}",self.agent._high_level_policy.call)
                     rgb_frames.append(frame)
+                    #rgb_frames.append(third_rgb_frame)
             # episode ended
             if self.record_video:
                 metrics = extract_scalars_from_info(info)
@@ -295,8 +315,8 @@ class Env:
                     frame = observations_to_image({k: v[0] for k, v in batch.items()}, info)
                     if not not_done_masks.item():
                         frame = observations_to_image({k: v[0] * 0.0 for k, v in batch.items()}, info)
-                    frame = overlay_frame(frame, info) ## with infos
-                    frame = append_text_underneath_image(frame,f"num_steps: {info['num_steps']} " + f"skill: {cur_skill}" +"\t")
+                    #frame = overlay_frame(frame, info) ## with infos
+                    #frame = append_text_underneath_image(frame,f"num_steps: {info['num_steps']} " + f"skill: {cur_skill}" +"\t")
                     rgb_frames.append(frame)
             # episode ended
             if self.record_video:

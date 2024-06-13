@@ -53,10 +53,6 @@ class ResetArmSkill(SkillPolicy):
     def _parse_skill_arg(self, skill_arg: str):
         return None
 
-    @property
-    def required_obs_keys(self) -> List[str]:
-        return super().required_obs_keys + ["joint"]
-
     def _is_skill_done(
         self, observations, rnn_hidden_states, prev_actions, masks, batch_idx
     ):
@@ -85,10 +81,15 @@ class ResetArmSkill(SkillPolicy):
         # Dividing by max initial delta means that the action will
         # always in [-1,1] and has the benefit of reducing the delta
         # amount was we converge to the target.
-        delta = delta / np.maximum(
-            self._initial_delta[cur_batch_idx].max(-1, keepdims=True), 1e-5
-        )
+        # delta = delta / np.maximum(
+        #     self._initial_delta[cur_batch_idx].max(-1, keepdims=True), 1e-5
+        # )
 
+        ## here is bug, should divide abs(max initial delta) by Hu Bin  
+        delta = delta / np.maximum(
+            np.abs(delta).max(-1, keepdims=True), 1e-5
+        )
+        ##
         action = torch.zeros_like(prev_actions)
         # There is an extra grab action that we don't want to set.
         action[
@@ -96,7 +97,10 @@ class ResetArmSkill(SkillPolicy):
         ] = torch.from_numpy(delta).to(
             device=action.device, dtype=action.dtype
         )
-
+        ## add policy_info by Hu Bin
         return PolicyActionData(
-            actions=action, rnn_hidden_states=rnn_hidden_states
+            actions=action, rnn_hidden_states=rnn_hidden_states, policy_info=[action,torch.zeros_like(action)]
         )
+        # return PolicyActionData(
+        #     actions=action, rnn_hidden_states=rnn_hidden_states
+        # )

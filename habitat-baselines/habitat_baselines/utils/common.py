@@ -791,3 +791,60 @@ class LagrangeInequalityCoefficient(nn.Module):
             return alpha.detach() * x - alpha * (x.detach() - self.threshold)
         else:
             return alpha * (self.threshold - x.detach()) - alpha.detach() * x
+
+
+## define normal to GMM
+def kl_loss(p, q, min_std=1e-6,reduce=True):
+    p_loc = p[:,:(p.shape[1]//2)]
+    with torch.no_grad():
+        p_scale = p[:,(p.shape[1]//2):].clamp_(min=min_std)
+    q_loc = q.mean
+    q_scale = q.stddev
+    var_ratio = (p_scale / q_scale).pow(2)
+    t1 = ((p_loc - q_loc) / q_scale).pow(2)
+    losses = 0.5 * (var_ratio + t1 - 1 - var_ratio.log())
+    if reduce:
+        return losses.sum(dim=1).mean()
+    return losses
+
+## define MSE metric
+def mse_loss(p, q, min_std=1e-6,reduce=True):
+    p_loc = p[:,:(p.shape[1]//2)]
+    with torch.no_grad():
+        p_scale = p[:,(p.shape[1]//2):].clamp_(min=min_std)
+    q_loc = q.mean
+    q_scale = q.stddev
+    t1 = (p_loc - q_loc).pow(2)
+    t2 = (p_scale - q_scale).pow(2)
+    losses = t1 + t2
+    if reduce:
+        return losses.sum(dim=1).mean()
+    return losses
+
+## define Wasserstein metric
+def was_loss(p, q, min_std=1e-6,reduce=True):
+    p_loc = p[:,:(p.shape[1]//2)]
+    with torch.no_grad():
+        p_scale = p[:,(p.shape[1]//2):].clamp_(min=min_std)
+    q_loc = q.mean
+    q_scale = q.stddev
+    t1 = (p_loc - q_loc).pow(2)
+    t2 = p_scale + q_scale - 2*torch.sqrt(p_scale*q_scale)
+    losses = t1 + t2
+    if reduce:
+        return losses.sum(dim=1).mean()
+    return losses
+
+def new_was_loss(p, q, min_std=1e-8,reduce=True):
+    p_loc = p[:,:(p.shape[1]//2-1)]
+    q_loc = q[:,:(q.shape[1]//2-1)]
+
+    p_scale = p[:,(p.shape[1]//2):-1]
+    q_scale = q[:,(q.shape[1]//2):-1]
+
+    t1 = (p_loc - q_loc).pow(2)
+    t2 = p_scale + q_scale - 2*torch.sqrt(p_scale*q_scale)
+    losses = t1 + t2
+    if reduce:
+        return losses.sum(dim=1).mean()
+    return losses

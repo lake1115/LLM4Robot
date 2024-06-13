@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 @hydra.main(
     version_base=None,
     config_path="config",
-    config_name="pointnav/ppo_pointnav_example",
+   # config_name="pointnav/ppo_pointnav_example",
 )
 def main(cfg: "DictConfig"):
     cfg = patch_config(cfg)
@@ -40,7 +40,6 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
     random.seed(config.habitat.seed)
     np.random.seed(config.habitat.seed)
     torch.manual_seed(config.habitat.seed)
-   
     if (
         config.habitat_baselines.force_torch_single_threaded
         and torch.cuda.is_available()

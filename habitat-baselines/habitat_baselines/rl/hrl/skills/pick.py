@@ -42,6 +42,10 @@ class PickSkillPolicy(NnSkillPolicy):
         for i in torch.nonzero(is_holding):
             # Do not release the object once it is held
             action.actions[i, self._grip_ac_idx] = 1.0
+            ## add policy_info by Hu Bin
+            # action.policy_info[0][i, self._grip_ac_idx] = 1.0
+            # action.policy_info[1][i, self._grip_ac_idx] = 0.0             
+            ##
         return action
 
     def _internal_act(

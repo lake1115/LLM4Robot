@@ -311,6 +311,16 @@ class PPOConfig(HabitatBaselinesBaseConfig):
     # Not that this does not change the memory requirements
     use_double_buffered_sampler: bool = False
 
+## add ksppo config by Hu ##
+@dataclass
+class KSPPOConfig(HabitatBaselinesBaseConfig):
+    """Kickstarting config"""
+    init_kickstarting_coef: float = 10.
+    min_kickstarting_coef: float = 0.1
+    kickstarting_coef_descent: float = 0.01
+    pretrain_flag: bool = False
+
+
 
 @dataclass
 class VERConfig(HabitatBaselinesBaseConfig):
@@ -373,6 +383,7 @@ class RLConfig(HabitatBaselinesBaseConfig):
     policy: PolicyConfig = PolicyConfig()
     ppo: PPOConfig = PPOConfig()
     ddppo: DDPPOConfig = DDPPOConfig()
+    ksppo: KSPPOConfig = KSPPOConfig()
     ver: VERConfig = VERConfig()
     auxiliary_losses: Dict[str, AuxLossConfig] = field(default_factory=dict)
 
@@ -485,3 +496,4 @@ class HabitatBaselinesConfigPlugin(SearchPathPlugin):
             provider="habitat",
             path="pkg://habitat_baselines/config/",
         )
+

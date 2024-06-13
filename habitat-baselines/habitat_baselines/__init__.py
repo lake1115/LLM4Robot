@@ -16,6 +16,8 @@ from habitat_baselines.rl.ppo.ppo_trainer import PPOTrainer
 from habitat_baselines.rl.ver.ver_trainer import VERTrainer
 from habitat_baselines.version import VERSION as __version__  # noqa: F401
 
+from habitat_baselines.rl.ksppo.ks_ppo_trainer import KSPPOTrainer
+from habitat_baselines.rl.ksppo.ks_rollout_storage import KickstartingStorage
 __all__ = [
     "BaseTrainer",
     "BaseRLTrainer",
@@ -26,4 +28,6 @@ __all__ = [
     "PACMANTrainer",
     "VQATrainer",
     "VERTrainer",
+    "KSPPOTrainer",
+    "KickstartingStorage",
 ]

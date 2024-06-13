@@ -422,6 +422,46 @@ class GRUStateEncoder(RNNStateEncoder):
         self.layer_init()
 
 
+'''
+@File    :   mlp_state_encoder
+@Time    :   2023/09/26 13:45:00
+@Author  :   Hu Bin 
+@Version :   1.0
+@Desc    :   None
+'''
+class MLPStateEncoder(RNNStateEncoder):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+    ):
+        super().__init__()
+
+        self.num_recurrent_layers = num_layers * 2
+
+        self.rnn = nn.Sequential()
+        self.rnn.add_module("input", nn.Linear(input_size, hidden_size))
+        
+        for i in range(self.num_recurrent_layers-1):
+            self.rnn.add_module("relu", nn.ReLU())
+            self.rnn.add_module(f"linear{i}", nn.Linear(hidden_size, hidden_size))
+
+        self.layer_init()
+
+    def forward(
+        self,
+        x,
+        hidden_states,
+        masks,
+        rnn_build_seq_info: Optional[Dict[str, torch.Tensor]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+      
+        x = self.rnn(x)
+       
+        return x, hidden_states
+
+
 def build_rnn_state_encoder(
     input_size: int,
     hidden_size: int,
@@ -441,5 +481,7 @@ def build_rnn_state_encoder(
         return GRUStateEncoder(input_size, hidden_size, num_layers)
     elif rnn_type == "lstm":
         return LSTMStateEncoder(input_size, hidden_size, num_layers)
+    elif rnn_type == "mlp":
+        return MLPStateEncoder(input_size, hidden_size, num_layers)
     else:
         raise RuntimeError(f"Did not recognize rnn type '{rnn_type}'")

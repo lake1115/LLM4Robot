@@ -4,7 +4,7 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Optional, Union
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -23,42 +23,22 @@ def _recursive_apply(inp, fn):
         return fn(inp)
 
 
-def _convert_to_numpy_safe(t: Optional[torch.Tensor]) -> torch.Tensor:
-    """
-    Moves any tensors on the CPU to numpy arrays. Leaves other values unaffected.
-    """
-
-    if t is not None and t.device.type == "cpu":
-        return t.numpy()
-    return t
-
-
 def _cpu_to_numpy(inp):
-    return _recursive_apply(inp, _convert_to_numpy_safe)
-
-
-def _numpy_to_cpu_safe(
-    t: Optional[Union[np.ndarray, torch.Tensor]]
-) -> Optional[torch.Tensor]:
-    """
-    Moves numpy arrays to torch CPU tensors.
-    """
-
-    if t is not None and isinstance(t, np.ndarray):
-        return torch.from_numpy(t)
-    return t
+    return _recursive_apply(
+        inp, lambda t: t.numpy() if t.device.type == "cpu" else t
+    )
 
 
 def _numpy_to_cpu(inp):
     return _recursive_apply(
         inp,
-        _numpy_to_cpu_safe,
+        lambda t: torch.from_numpy(t) if isinstance(t, np.ndarray) else t,
     )
 
 
 def distributed_var_mean(
     values: torch.Tensor,
-) -> Union[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     r"""Computes the mean and variances of a tensor over multiple workers.
 
     This method is equivalent to first collecting all versions of values and

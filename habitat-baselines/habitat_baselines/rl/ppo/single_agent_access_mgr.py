@@ -78,7 +78,12 @@ class SingleAgentAccessMgr(AgentAccessMgr):
                 lr_lambda=lambda _: lr_schedule_fn(self._percent_done_fn()),
             )
         if resume_state is not None:
-            self._updater.load_state_dict(resume_state["state_dict"])
+            self._updater.load_state_dict(
+                {
+                    "actor_critic." + k: v
+                    for k, v, in resume_state["state_dict"].items()
+                }
+            )
             self._updater.optimizer.load_state_dict(
                 resume_state["optim_state"]
             )
@@ -116,8 +121,11 @@ class SingleAgentAccessMgr(AgentAccessMgr):
             updater_cls = baseline_registry.get_updater(
                 self._config.habitat_baselines.updater_name
             )
-
-        updater = updater_cls.from_config(actor_critic, self._ppo_cfg)
+        ## Add ksppo cfg. by Hu ##
+        if self._config.habitat_baselines.updater_name == "PPO":
+            updater = updater_cls.from_config(actor_critic, self._ppo_cfg)
+        elif self._config.habitat_baselines.updater_name == "KSPPO":
+            updater = updater_cls.from_config(actor_critic, self._ppo_cfg, self._config.habitat_baselines.rl.ksppo)
         logger.info(
             "agent number of parameters: {}".format(
                 sum(param.numel() for param in updater.parameters())
@@ -216,10 +224,16 @@ class SingleAgentAccessMgr(AgentAccessMgr):
     def load_state_dict(self, state: Dict) -> None:
         self._actor_critic.load_state_dict(state["state_dict"])
         if self._updater is not None:
+            self._updater.load_state_dict(
+                {
+                    "actor_critic." + k: v
+                    for k, v, in state["state_dict"].items()
+                }
+            )
             if "optim_state" in state:
-                self._actor_critic.load_state_dict(state["optim_state"])
+                self._updater.optimizer.load_state_dict(state["optim_state"])
             if "lr_sched_state" in state:
-                self._actor_critic.load_state_dict(state["lr_sched_state"])
+                self._lr_scheduler.load_state_dict(state["lr_sched_state"][0])
 
     @property
     def hidden_state_shape(self):

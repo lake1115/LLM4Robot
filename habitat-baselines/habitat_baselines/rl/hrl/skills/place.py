@@ -27,7 +27,11 @@ class PlaceSkillPolicy(PickSkillPolicy):
         is_not_holding = 1 - observations[IsHoldingSensor.cls_uuid].view(-1)
         for i in torch.nonzero(is_not_holding):
             # Do not regrasp the object once it is released.
-            action[i, self._grip_ac_idx] = -1.0
+            action.actions[i, self._grip_ac_idx] = -1.0
+            ## add policy_info by Hu Bin
+            # action.policy_info[0][i, self._grip_ac_idx] = -1.0
+            # action.policy_info[1][i, self._grip_ac_idx] = 0.0             
+            ##
         return action
 
     def _is_skill_done(
