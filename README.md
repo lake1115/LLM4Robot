@@ -55,7 +55,7 @@ LLM4Robot is a modular high-level library for end-to-end development in embodied
 
 ## Related Work
 
-This repo is intended to serve as a foundation with which you can reproduce the results of the experiments detailed in our paper, [Large language model as a policy teacher for training reinforcement learning agents]([https://arxiv.org/pdf/2306.03604.pdf](https://www.researchgate.net/profile/Bin-Liu-120/publication/375959604_Large_Language_Model_as_a_Policy_Teacher_for_Training_Reinforcement_Learning_Agents/links/66553e12bc86444c7207452a/Large-Language-Model-as-a-Policy-Teacher-for-Training-Reinforcement-Learning-Agents.pdf)
+This repo is intended to serve as a foundation with which you can reproduce the results of the experiments detailed in our paper, [Large language model as a policy teacher for training reinforcement learning agents](https://www.researchgate.net/profile/Bin-Liu-120/publication/375959604_Large_Language_Model_as_a_Policy_Teacher_for_Training_Reinforcement_Learning_Agents/links/66553e12bc86444c7207452a/Large-Language-Model-as-a-Policy-Teacher-for-Training-Reinforcement-Learning-Agents.pdf)
 
 ## Demonstrate
 
